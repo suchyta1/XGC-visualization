@@ -10,11 +10,6 @@ import numpy as np
 import os
 import adios2
 
-#from scipy.io import matlab
-#from scipy.optimize import curve_fit
-#from scipy.special import erfc
-#import scipy.sparse as sp
-
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.tri import Triangulation
@@ -22,7 +17,31 @@ import matplotlib.ticker
 
 import sys
 import re
-import kittie
+
+try:
+    import kittie
+except:
+    kittie = None
+
+
+def GetType(varid):
+    size = varid.Sizeof()
+    kind = varid.Type()
+
+    # I'm just handling the common ones for now
+    if kind.find('int') != -1:
+        if size == 8:
+            UserType = np.int64
+        elif size == 4:
+            UserType = np.int32
+        elif size == 2:
+            UserType = np.int16
+    elif kind.find('double') != -1:
+        UserType = np.float64
+    elif (kind.find('float') != -1) or (kind.find('single') != -1):
+        UserType = np.float32
+
+    return UserType
 
 
 def GetText(filename, searchpattern):
@@ -168,7 +187,7 @@ class xgc1(object):
         if not PlaneObj.init:
             PlaneObj.triobj = Triangulation(self.mesh.rz[:, 0], self.mesh.rz[:, 1], self.mesh.nd_connect_list)
             PlaneObj.init = True
-            if PlaneObj.movie:
+            if PlaneObj.movie and (kittie is not None):
                 PlaneObj.PlotMovie = kittie.MovieGenerator(PlaneObj.outdir)
         else:
             PlaneObj.ax = PlaneObj.fig.add_subplot(PlaneObj.gs[0, 0])
@@ -210,7 +229,7 @@ class xgc1(object):
         imagename = os.path.join(outdir, "{1}.{0}".format(PlaneObj.ext, PlaneObj.outdir))
         PlaneObj.fig.savefig(imagename, bbox_inches="tight")
         PlaneObj.fig.clear()
-        if PlaneObj.movie:
+        if PlaneObj.movie and (kittie is not None):
             PlaneObj.PlotMovie.AddFrame(os.path.abspath(imagename))
 
 
@@ -226,7 +245,7 @@ class xgc1(object):
             self.TurbData.enp = np.empty( shape=(0, 0) )
             self.TurbData.enn = np.empty( shape=(self.data3D.dpot.shape[0], 0))
 
-            if self.TurbData.movie:
+            if self.TurbData.movie and (kittie is not None):
                 self.TurbData.ennMovie = kittie.MovieGenerator('enn')
                 self.TurbData.enpMovie = kittie.MovieGenerator('enp')
             
@@ -264,7 +283,7 @@ class xgc1(object):
         imagename = os.path.join(outdir, "enp.{0}".format(self.TurbData.ext))
         self.TurbData.fig.savefig(imagename, bbox_inches="tight")
         self.TurbData.ax.cla()
-        if self.TurbData.movie:
+        if self.TurbData.movie and (kittie is not None):
             self.TurbData.ennMovie.AddFrame(os.path.abspath(imagename))
 
         for i in range(1, self.TurbData.nmodes + 1):
@@ -275,7 +294,7 @@ class xgc1(object):
         imagename = os.path.join(outdir, "enn.{0}".format(self.TurbData.ext))
         self.TurbData.fig.savefig(imagename, bbox_inches="tight")
         self.TurbData.ax.cla()
-        if self.TurbData.movie:
+        if self.TurbData.movie and (kittie is not None):
             self.TurbData.enpMovie.AddFrame(os.path.abspath(imagename))
 
 
@@ -420,7 +439,12 @@ class xgc1(object):
                     shape = [1]
                 else:
                     var.SetSelection([[0]*len(shape), shape])
-                setattr(self, varname, np.empty(shape, dtype=kittie.kittie_common.GetType(var)))
+
+                if kittie is not None:
+                    ADIOSType = kittie.kittie_common.GetType
+                else:
+                    ADIOSType = GetType
+                setattr(self, varname, np.empty(shape, dtype=ADIOSType(var)))
                 self.engine.Get(var, getattr(self, varname))
 
             if not self.perstep:
