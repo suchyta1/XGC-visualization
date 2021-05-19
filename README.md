@@ -1,6 +1,15 @@
 # XGC-visualization
 
-Python script for XGC data analysis
+Python script for XGC data analysis and Maplotlib visualization
+
+## Dependencies
+
+- Numpy
+- Matplotlib
+- ADIOS Python bindings
+- Optional: EFFIS Python bindings -- needed for movie EFFIS hooks
+
+## Usage
 
 ```
 usage: xgc-visualization.py [-h] [-c COLOR] [-f OPTSFILE] datadir
