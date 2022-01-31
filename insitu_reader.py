@@ -67,11 +67,17 @@ class xgc1(object):
 
     class PlotSetup(object):
 
-        def __init__(self, options):
+        def __init__(self, options, codename, adios):
             self.options = options
             self.gs = gridspec.GridSpec(1, 1)
             self.fig = plt.figure(tight_layout=True)
             self.ax = self.fig.add_subplot(self.gs[0, 0])
+
+            self.codename = codename
+            self.DashboardInit = False
+            self.adios = adios
+            self.DefaultOption('dashboard', True)
+
             self.DefaultOption('fontsize', 'medium')
             self.DefaultOption('ext', 'png')
             self.DefaultOption('movie', False)
@@ -84,14 +90,37 @@ class xgc1(object):
                 setattr(self, key, default)
 
 
+        def DashboardSave(self, plotname, step, directory):
+            steparr = np.array([step])
+            if not self.DashboardInit:
+                ioname = plotname + ".done"
+                self.DashboardIO = self.adios.DeclareIO(ioname)
+                VarNumber = self.DashboardIO.DefineVariable("Step", steparr, [], [], [])
+                self.DashboardEngine = self.DashboardIO.Open(ioname + ".bp", adios2.Mode.Write)
+                self.DashboardInit = True
+
+            tmp = os.path.join("{0}-images".format(plotname), "{0}".format(step))
+            os.makedirs(tmp)
+            tmp = os.path.join(tmp, "{0}-{1}".format(self.codename, plotname))
+            os.symlink(os.path.abspath(directory), os.path.abspath(tmp))
+
+            self.DashboardEngine.BeginStep()
+            var = self.DashboardIO.InquireVariable("Step")
+            self.DashboardEngine.Put(var, steparr)
+            self.DashboardEngine.EndStep()
+
+
+
     class PlanePlot(PlotSetup):
 
         def __init__(self, options, xgc1, label):
-            super().__init__(options)
+            super().__init__(options, xgc1.options['codename'], xgc1.adios)
             self.DefaultOption('plane', 0)
             self.DefaultOption('cmap', 'jet')
             self.DefaultOption('levels', 50)
             self.DefaultOption('percentile', None)
+            self.DefaultOption('MaxInchesX', 10)
+            self.DefaultOption('MaxInchesY', 8)
             self.init = False
             xgc1.mesh.AddVariables(["rz", "nd_connect_list"])
             xgc1.dataunits.AddVariables(["sml_dt", "diag_1d_period"])
@@ -115,7 +144,7 @@ class xgc1(object):
         self.data3D = self.BaseData(os.path.join(self.datadir, "xgc.3d.bp"), "field3D", self.adios, subsample_factor=options['subsample-factor-3D'], last_step=options['last-step'])
 
         if self.options['turbulence intensity']['use']:
-            self.TurbData = self.PlotSetup(self.options['turbulence intensity'])
+            self.TurbData = self.PlotSetup(self.options['turbulence intensity'], self.options['codename'], self.adios)
             self.TurbData.DefaultOption('outdir', 'TurbulenceIntensity')
             self.TurbData.DefaultOption('psirange', [0.17, 0.4])
             self.TurbData.DefaultOption('nmodes', 9)
@@ -134,6 +163,7 @@ class xgc1(object):
             self.dphi.var = "dpot"
             
         if self.options['dA']['use']:
+            self.options['dA']['codename'] = self.opions['codename']
             self.dA = self.PlanePlot(self.options['dA'], self, "$\delta A$")
             self.dA.DefaultOption('outdir', 'dA')
             self.data3D.AddVariables(["apars"])
@@ -159,11 +189,20 @@ class xgc1(object):
             if (self.data3D.period == None) and os.path.exists(os.path.join(self.datadir, "input")):
                 self.data3D.period = self.dataunits.diag_1d_period
             if not self.data3D.perstep:
-                self.data3D.AddVariables(["_StepPhysical"])
+                self.data3D.AddVariables(["_StepPhysical", "_StepNumber"])
 
 
     def NotDone(self):
         return self.data3D.on
+
+
+    def Close(self):
+        if self.options['turbulence intensity']['use'] and self.TurbData.DashboardInit:
+            self.TurbData.DashboardEngine.Close()
+        if self.options['dphi']['use'] and self.dphi.DashboardInit:
+            self.dphi.DashboardEngine.Close()
+        if self.options['dA']['use'] and self.dA.DashboardInit:
+            self.dA.DashboardEngine.Close()
 
 
     def MakePlots(self):
@@ -222,6 +261,17 @@ class xgc1(object):
         PlaneObj.ax.set_ylabel('z (m)', fontsize=PlaneObj.fontsize)
         PlaneObj.ax.tick_params(axis='both', which='major', labelsize=PlaneObj.fontsize)
 
+        xsize, ysize = PlaneObj.fig.get_size_inches()
+        while True:
+            xnew = xsize * 1.05
+            ynew = ysize * 1.05
+            if (xnew < PlaneObj.MaxInchesX) and (ynew < PlaneObj.MaxInchesY):
+                xsize = xnew
+                ysize = ynew
+            else:
+                PlaneObj.fig.set_size_inches(xsize, ysize)
+                break
+
         outdir = os.path.join(self.outdir, PlaneObj.outdir, "{0:05d}".format(self.data3D.StepNumber))
         if not os.path.exists(outdir):
             os.makedirs(outdir)
@@ -231,6 +281,8 @@ class xgc1(object):
         PlaneObj.fig.clear()
         if PlaneObj.movie and (kittie is not None):
             PlaneObj.PlotMovie.AddFrame(os.path.abspath(imagename))
+        if PlaneObj.dashboard and (kittie is not None):
+            PlaneObj.DashboardSave(PlaneObj.outdir, self.data3D.StepNumber, os.path.dirname(imagename))
 
 
     def TurbulenceIntensity(self):
@@ -296,6 +348,8 @@ class xgc1(object):
         self.TurbData.ax.cla()
         if self.TurbData.movie and (kittie is not None):
             self.TurbData.enpMovie.AddFrame(os.path.abspath(imagename))
+        if self.TurbData.dashboard and (kittie is not None):
+            self.TurbData.DashboardSave(self.TurbData.outdir, self.data3D.StepNumber, os.path.dirname(imagename))
 
 
     class BaseData(object):
@@ -447,10 +501,18 @@ class xgc1(object):
                 setattr(self, varname, np.empty(shape, dtype=ADIOSType(var)))
                 self.engine.Get(var, getattr(self, varname))
 
+            """
             if not self.perstep:
                 self.StepNumber = self.engine.CurrentStep()
+            """
 
             self.engine.EndStep()
+
+            if not self.perstep:
+                self.StepNumber = getattr(self, "_StepNumber", None)
+                if self.StepNumber is not None:
+                    self.StepNumber = self.StepNumber[0]
+
 
             if self.perstep:
                 self.engine.Close()

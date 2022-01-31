@@ -23,6 +23,8 @@ def SetOptions(options):
         options['subsample-factor-3D'] = 1
     if 'last-step' not in options:
         options['last-step'] = None
+    if 'codename' not in options:
+        options['codename'] = "effis"
 
     return options
     
@@ -44,4 +46,6 @@ if __name__ == "__main__":
 
     while xgc1.NotDone():
         xgc1.MakePlots()
-
+    print("Plotting complete")
+    xgc1.Close()
+    print("exiting")
