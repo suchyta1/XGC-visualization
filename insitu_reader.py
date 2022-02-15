@@ -161,6 +161,7 @@ class xgc1(object):
         self.adios = adios2.ADIOS(*adiosargs)
 
         self.dataunits = self.BaseData(os.path.join(self.datadir, "xgc.units.bp"), "output.units", self.adios, perstep=False)
+        self.databfield = self.BaseData(os.path.join(self.datadir, "xgc.bfieldm.bp"), "output.bfield", self.adios, perstep=False)
         self.f0mesh = self.BaseData(os.path.join(self.datadir, "xgc.f0.mesh.bp"), "diagnosis.f0.mesh", self.adios, perstep=False)
         self.mesh = self.BaseData(os.path.join(self.datadir, "xgc.mesh.bp"), "diagnosis.mesh", self.adios, perstep=False)
         self.volumes = self.BaseData(os.path.join(self.datadir, "xgc.volumes.bp"), "output.volumes", self.adios, perstep=False)
@@ -168,7 +169,7 @@ class xgc1(object):
         self.data1D = self.BaseData(os.path.join(self.datadir, "xgc.oneddiag.bp"), "diagnosis.1d", self.adios, subsample_factor=options['subsample-factor-1D'], perstep=False, skip=options['diag1D']['skip'])
         self.dataheat = self.BaseData(os.path.join(self.datadir, "xgc.heatdiag.bp"), "diagnosis.heat", self.adios, subsample_factor=options['subsample-factor-heat'], skip=options['diagheat']['skip'])
 
-        self.dataunits.AddVariables(["sml_dt", "diag_1d_period", "sml_wedge_n", "eq_x_z"])
+        self.dataunits.AddVariables(["sml_dt", "diag_1d_period", "sml_wedge_n", "eq_x_z", "eq_axis_r"])
 
         '''
         if self.options['turbulence intensity']['use']:
@@ -220,11 +221,13 @@ class xgc1(object):
         if self.options['diagheat']['use']:
             self.diagheat = self.PlotSetup(self.options['diagheat'], self.options['codename'], self.adios)
             self.diagheat.Time = None
+            self.databfield.AddVariables(['/bfield/psi_eq_x_psi', '/bfield/rvec'])
             self.dataheat.AddVariables([
                 "time",
                 "e_perp_energy_psi", "i_perp_energy_psi",
                 "e_para_energy_psi", "i_para_energy_psi",
-                "e_number_psi", "i_number_psi"])
+                "e_number_psi", "i_number_psi",
+                "psi"])
 
 
         # Start getting data
@@ -254,6 +257,22 @@ class xgc1(object):
             self.data1D_0.time = self.data1D_0.time[0]
             if self.data1D_0.time != 0:
                 print("First step in xgc.oneddiag.bp is not 0", file=sys.stderr)
+
+        if self.databfield.on:
+            self.databfield.SingleRead()
+
+            self.databfield.rmid = getattr(self.databfield, '/bfield/rvec')
+            self.databfield.drmid = self.databfield.rmid * 0  # mem allocation
+            self.databfield.drmid[1:-1] = (self.databfield.rmid[2:] - self.databfield.rmid[0:-2]) * 0.5
+            self.databfield.drmid[0] = drmid[1]
+            self.databfield.drmid[-1] = drmid[-2]
+
+            psi_in = getattr(self.databfield, '/bfield/psi_eq_x_psi')
+            mask = np.argwhere(self.databfield.rmid > self.dataunits.eq_axis_r)
+            n0 = mask[0]
+            rmid0 = self.databfield.rmid[n0:]
+            psin0 = psi_in[n0:]
+            self.databfield.dpndrs = (psin0[n0] - psin0[n0 - 1]) / (rmid0[n0] - rmid0[n0 - 1])
 
         if self.options['diag3D']['use']:
             self.diag3D.triobj = Triangulation(self.mesh.rz[:, 0], self.mesh.rz[:, 1], self.mesh.nd_connect_list)
@@ -411,10 +430,13 @@ class xgc1(object):
             self.diagheat.qi = np.empty((2, 0), dtype=self.dataheat.i_perp_energy_psi.dtype)
             self.diagheat.e_number_psi = np.empty((2, 0), dtype=self.dataheat.e_number_psi.dtype)
             self.diagheat.i_number_psi = np.empty((2, 0), dtype=self.dataheat.i_number_psi.dtype)
+            self.diagheat.lq_int = np.empty((2, 0), dtype=self.dataheat.i_perp_energy_psi.dtype)
+            lq_int = np.empty((2, 1), dtype=self.dataheat.i_perp_energy_psi.dtype)
 
         self.diagheat.Time = np.append(self.diagheat.Time, self.dataheat.time)
         qe = self.dataunits.sml_wedge_n * (np.sum(self.dataheat.e_perp_energy_psi, axis=1) + np.sum(self.dataheat.e_para_energy_psi, axis=1))
         qi = self.dataunits.sml_wedge_n * (np.sum(self.dataheat.i_perp_energy_psi, axis=1) + np.sum(self.dataheat.i_para_energy_psi, axis=1))
+        qt = self.dataheat.e_perp_energy_psi + self.dataheat.e_para_energy_psi + self.dataheat.i_perp_energy_psi + self.dataheat.i_para_energy_psi
         e_number_psi = np.sum(self.dataheat.e_number_psi, axis=1)
         i_number_psi = np.sum(self.dataheat.i_number_psi, axis=1)
         self.diagheat.qe = np.append(self.diagheat.qe, qe.reshape((2, 1)), axis=1)
@@ -444,27 +466,45 @@ class xgc1(object):
             self.diagheat.ax.set_xlabel('Time')
             self.diagheat.ax.set_ylabel('Heat (MW)')
             self.diagheat.ax.legend()
-            imagename = os.path.join(outdir, "Haet_Inboard.{0}".format(self.diagheat.ext))
+            imagename = os.path.join(outdir, "Heat_Inboard.{0}".format(self.diagheat.ext))
             self.diagheat.fig.savefig(imagename, bbox_inches="tight")
             self.diagheat.ax.cla()
 
-            self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.e_number_psi[0], label='Electron Outboard')
-            self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.i_number_psi[0], label='Ion Outboard')
-            self.diagheat.ax.set_xlabel('Time (ms)')
-            self.diagheat.ax.set_ylabel('# particle per time step')
+            psi_in = self.dataheat.psi / self.dataunits.psi_x
+            for i in range(2):
+                dpsi_in = 
+                ds = (psi_in[i][1] - psi_in[i][0]) / self.databfield.dpndrs * 2 * np.pi * self.dataunits.eq_axis_r /self.dataunits.sml_wedge_n 
+                QT = qt[i] / dt / ds
+                mx = np.amax(QT)
+                lq_int[i][0] = np.sum(QT * self.databfield.drmid) / mx
+            self.diagheat.lq_int = np.append(self.diagheat.lq_int, lq_int, axis=1)
+            self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.lq_int[0] * 1e3, label='Outboard')
+            self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.lq_int[1] * 1e3, label='Inboard')
+            self.diagheat.ax.set_xlabel('Time')
+            self.diagheat.ax.set_ylabel('Lambda_q, int (mm)')
             self.diagheat.ax.legend()
-            imagename = os.path.join(outdir, "Number_Outboard.{0}".format(self.diagheat.ext))
+            imagename = os.path.join(outdir, "Lambda_q.{0}".format(self.diagheat.ext))
             self.diagheat.fig.savefig(imagename, bbox_inches="tight")
             self.diagheat.ax.cla()
 
-            self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.e_number_psi[1], label='Electron Inboard')
-            self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.i_number_psi[1], label='Ion Inboard')
-            self.diagheat.ax.set_xlabel('Time (ms)')
-            self.diagheat.ax.set_ylabel('# particle per time step')
-            self.diagheat.ax.legend()
-            imagename = os.path.join(outdir, "Number_Inboard.{0}".format(self.diagheat.ext))
-            self.diagheat.fig.savefig(imagename, bbox_inches="tight")
-            self.diagheat.ax.cla()
+
+        self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.e_number_psi[0], label='Electron Outboard')
+        self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.i_number_psi[0], label='Ion Outboard')
+        self.diagheat.ax.set_xlabel('Time (ms)')
+        self.diagheat.ax.set_ylabel('# particle per time step')
+        self.diagheat.ax.legend()
+        imagename = os.path.join(outdir, "Number_Outboard.{0}".format(self.diagheat.ext))
+        self.diagheat.fig.savefig(imagename, bbox_inches="tight")
+        self.diagheat.ax.cla()
+
+        self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.e_number_psi[1], label='Electron Inboard')
+        self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.i_number_psi[1], label='Ion Inboard')
+        self.diagheat.ax.set_xlabel('Time (ms)')
+        self.diagheat.ax.set_ylabel('# particle per time step')
+        self.diagheat.ax.legend()
+        imagename = os.path.join(outdir, "Number_Inboard.{0}".format(self.diagheat.ext))
+        self.diagheat.fig.savefig(imagename, bbox_inches="tight")
+        self.diagheat.ax.cla()
 
 
     def Plot1D(self):
