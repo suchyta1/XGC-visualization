@@ -19,6 +19,9 @@ import sys
 import re
 import copy
 
+from scipy.optimize import curve_fit
+from scipy.special import erfc
+
 try:
     import kittie
 except:
@@ -262,17 +265,21 @@ class xgc1(object):
             self.databfield.SingleRead()
 
             self.databfield.rmid = getattr(self.databfield, '/bfield/rvec')
+            """
             self.databfield.drmid = self.databfield.rmid * 0  # mem allocation
             self.databfield.drmid[1:-1] = (self.databfield.rmid[2:] - self.databfield.rmid[0:-2]) * 0.5
-            self.databfield.drmid[0] = drmid[1]
-            self.databfield.drmid[-1] = drmid[-2]
+            self.databfield.drmid[0] = self.databfield.drmid[1]
+            self.databfield.drmid[-1] = self.databfield.drmid[-2]
+            """
 
             psi_in = getattr(self.databfield, '/bfield/psi_eq_x_psi')
             mask = np.argwhere(self.databfield.rmid > self.dataunits.eq_axis_r)
-            n0 = mask[0]
-            rmid0 = self.databfield.rmid[n0:]
-            psin0 = psi_in[n0:]
-            self.databfield.dpndrs = (psin0[n0] - psin0[n0 - 1]) / (rmid0[n0] - rmid0[n0 - 1])
+            n0 = mask[0][0]
+            self.databfield.rmid0 = self.databfield.rmid[n0:]
+            self.databfield.psin0 = psi_in[n0:]
+            mask = np.argwhere(self.databfield.psin0 > 1)
+            n0 = mask[1]
+            self.databfield.dpndrs = (self.databfield.psin0[n0] - self.databfield.psin0[n0 - 1]) / (self.databfield.rmid0[n0] - self.databfield.rmid0[n0 - 1])
 
         if self.options['diag3D']['use']:
             self.diag3D.triobj = Triangulation(self.mesh.rz[:, 0], self.mesh.rz[:, 1], self.mesh.nd_connect_list)
@@ -416,6 +423,24 @@ class xgc1(object):
             self.PlotHeat()
 
 
+    def eich(self, xdata, q0, s, lq, dsep):
+        return 0.5 * q0 * np.exp((0.5 * s / lq)**2 - (xdata - dsep) / lq) * erfc(0.5 * s / lq - (xdata - dsep) / s)
+
+    def eich_fit1(self, ydata, rmidsepmm, pmask):
+        q0init = np.max(ydata)
+        sinit = 2   # 2mm
+        lqinit = 1  # 1mm
+        dsepinit = 0.1  # 0.1 mm
+        p0 = np.array([q0init, sinit, lqinit, dsepinit])
+        
+        if(pmask==None):
+            popt, pconv = curve_fit(self.eich, rmidsepmm, ydata, p0=p0)
+        else:
+            popt, pconv = curve_fit(self.eich, rmidsepmm[pmask], ydata[pmask], p0=p0)
+
+        return popt, pconv
+    
+
     def PlotHeat(self):
 
         # Directory setup (for dashboard)
@@ -431,12 +456,14 @@ class xgc1(object):
             self.diagheat.e_number_psi = np.empty((2, 0), dtype=self.dataheat.e_number_psi.dtype)
             self.diagheat.i_number_psi = np.empty((2, 0), dtype=self.dataheat.i_number_psi.dtype)
             self.diagheat.lq_int = np.empty((2, 0), dtype=self.dataheat.i_perp_energy_psi.dtype)
-            lq_int = np.empty((2, 1), dtype=self.dataheat.i_perp_energy_psi.dtype)
+            self.diagheat.eich_fit = np.empty((2, 0), dtype=self.dataheat.i_perp_energy_psi.dtype)
 
         self.diagheat.Time = np.append(self.diagheat.Time, self.dataheat.time)
         qe = self.dataunits.sml_wedge_n * (np.sum(self.dataheat.e_perp_energy_psi, axis=1) + np.sum(self.dataheat.e_para_energy_psi, axis=1))
         qi = self.dataunits.sml_wedge_n * (np.sum(self.dataheat.i_perp_energy_psi, axis=1) + np.sum(self.dataheat.i_para_energy_psi, axis=1))
-        qt = self.dataheat.e_perp_energy_psi + self.dataheat.e_para_energy_psi + self.dataheat.i_perp_energy_psi + self.dataheat.i_para_energy_psi
+        QE = self.dataheat.e_perp_energy_psi + self.dataheat.e_para_energy_psi
+        QI = self.dataheat.i_perp_energy_psi + self.dataheat.i_para_energy_psi
+        QT = QE + QI
         e_number_psi = np.sum(self.dataheat.e_number_psi, axis=1)
         i_number_psi = np.sum(self.dataheat.i_number_psi, axis=1)
         self.diagheat.qe = np.append(self.diagheat.qe, qe.reshape((2, 1)), axis=1)
@@ -470,16 +497,27 @@ class xgc1(object):
             self.diagheat.fig.savefig(imagename, bbox_inches="tight")
             self.diagheat.ax.cla()
 
+            lq_int = np.empty((2, 1), dtype=self.dataheat.i_perp_energy_psi.dtype)
+            rmidsep = np.empty(self.dataheat.i_perp_energy_psi.shape, dtype=self.dataheat.i_perp_energy_psi.dtype)
             psi_in = self.dataheat.psi / self.dataunits.psi_x
             for i in range(2):
-                dpsi_in = 
+                rmid = np.interp(psi_in[i], self.databfield.psin0, self.databfield.rmid0)
+                rs = np.interp([1], psi_in[i], rmid)
+                rmidsep[i] = rmid - rs
+                drmid = rmid * 0  # mem allocation
+                drmid[1:-1] = (rmid[2:] - rmid[0:-2]) * 0.5
+                drmid[0] = drmid[1]
+                drmid[-1] = drmid[-2]
                 ds = (psi_in[i][1] - psi_in[i][0]) / self.databfield.dpndrs * 2 * np.pi * self.dataunits.eq_axis_r /self.dataunits.sml_wedge_n 
-                QT = qt[i] / dt / ds
-                mx = np.amax(QT)
-                lq_int[i][0] = np.sum(QT * self.databfield.drmid) / mx
+                QT[i] = QT[i] / dt / ds
+                QE[i] = QE[i] / dt / ds
+                QI[i] = QI[i] / dt / ds
+                mx = np.amax(QT[i])
+                lq_int[i][0] = np.sum(QT[i] * drmid) / mx
+
             self.diagheat.lq_int = np.append(self.diagheat.lq_int, lq_int, axis=1)
-            self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.lq_int[0] * 1e3, label='Outboard')
-            self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.lq_int[1] * 1e3, label='Inboard')
+            self.diagheat.ax.plot(self.diagheat.Time[1:] * 1E3, self.diagheat.lq_int[0] * 1e3, label='Outboard')
+            self.diagheat.ax.plot(self.diagheat.Time[1:] * 1E3, self.diagheat.lq_int[1] * 1e3, label='Inboard')
             self.diagheat.ax.set_xlabel('Time')
             self.diagheat.ax.set_ylabel('Lambda_q, int (mm)')
             self.diagheat.ax.legend()
@@ -487,6 +525,55 @@ class xgc1(object):
             self.diagheat.fig.savefig(imagename, bbox_inches="tight")
             self.diagheat.ax.cla()
 
+            self.diagheat.ax.plot(rmidsep[0] * 1E3, QE[0] / 1e6, label='Electron')
+            self.diagheat.ax.plot(rmidsep[0] * 1E3, QI[0] / 1e6, label='Ion')
+            self.diagheat.ax.plot(rmidsep[0] * 1E3, QT[0] / 1e6, label='Total')
+            self.diagheat.ax.set_xlabel('Midplane distance (mm)')
+            self.diagheat.ax.set_ylabel('Heat Load (MW)')
+            self.diagheat.ax.set_title('Outboard {0:.4f} (ms)'.format(self.diagheat.Time[-1]*1e3))
+            self.diagheat.ax.legend()
+            self.diagheat.ax.set_xlim([-10, 30])
+            imagename = os.path.join(outdir, "Heat_Load_Outboard_dist.{0}".format(self.diagheat.ext))
+            self.diagheat.fig.savefig(imagename, bbox_inches="tight")
+            self.diagheat.ax.cla()
+
+            self.diagheat.ax.plot(rmidsep[1] * 1E3, QE[1] / 1e6, label='Electron')
+            self.diagheat.ax.plot(rmidsep[1] * 1E3, QI[1] / 1e6, label='Ion')
+            self.diagheat.ax.plot(rmidsep[1] * 1E3, QT[1] / 1e6, label='Total')
+            self.diagheat.ax.set_xlabel('Midplane distance (mm)')
+            self.diagheat.ax.set_ylabel('Heat Load (MW)')
+            self.diagheat.ax.set_title('Inboard {0:.4f} (ms)'.format(self.diagheat.Time[-1]))
+            self.diagheat.ax.legend()
+            self.diagheat.ax.set_xlim([-10, 30])
+            imagename = os.path.join(outdir, "Heat_Load_Inboard_dist.{0}".format(self.diagheat.ext))
+            self.diagheat.fig.savefig(imagename, bbox_inches="tight")
+            self.diagheat.ax.cla()
+
+            popt, pconv = self.eich_fit1(QT[0], rmidsep[0]*1e3, None)
+            self.diagheat.ax.plot(rmidsep[0]*1e3, self.eich(rmidsep[0]*1e3, popt[0], popt[1], popt[2], popt[3]), label='Eich')
+            self.diagheat.ax.plot(rmidsep[0]*1e3, QT[0], label='Heatload')
+            self.diagheat.ax.set_title('t={0:.4f} (ms) Outboard\n $\lambda_q$={1:.3f}, S={2:.3f}'.format(self.diagheat.Time[-1]*1E3, popt[2], popt[1]))
+            self.diagheat.ax.set_xlabel('Midplane distance (mm)')
+            self.diagheat.ax.legend()
+            self.diagheat.ax.set_xlim([-10, 30])
+            imagename = os.path.join(outdir, "Outboard_eich.{0}".format(self.diagheat.ext))
+            self.diagheat.fig.savefig(imagename, bbox_inches="tight")
+            self.diagheat.ax.cla()
+            
+            eich_fit = np.empty((2, 1), dtype=self.dataheat.i_perp_energy_psi.dtype)
+            popt0, pconv0 = self.eich_fit1(QT[0], rmidsep[0]*1e3, None)
+            popt1, pconv1 = self.eich_fit1(QT[1], rmidsep[1]*1e3, None)
+            eich_fit[0][0] = popt0[2]
+            eich_fit[1][0] = popt1[2]
+            self.diagheat.eich_fit = np.append(self.diagheat.eich_fit, eich_fit, axis=1)
+            self.diagheat.ax.plot(self.diagheat.Time[1:] * 1E3, self.diagheat.eich_fit[0],label='Outboard')
+            self.diagheat.ax.plot(self.diagheat.Time[1:] * 1E3, self.diagheat.eich_fit[1],label='Inboard')
+            self.diagheat.ax.legend()
+            self.diagheat.ax.set_xlabel('Time (ms)')
+            self.diagheat.ax.set_ylabel('Lambda_q, eich (mm)')
+            imagename = os.path.join(outdir, "lq_eich.{0}".format(self.diagheat.ext))
+            self.diagheat.fig.savefig(imagename, bbox_inches="tight")
+            self.diagheat.ax.cla()
 
         self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.e_number_psi[0], label='Electron Outboard')
         self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.i_number_psi[0], label='Ion Outboard')
@@ -704,6 +791,13 @@ class xgc1(object):
         self.diag3D.fig.savefig(imagename, bbox_inches="tight")
         self.diag3D.fig.clear()
         self.diag3D.ax = self.diag3D.fig.add_subplot(self.diag3D.gs[0, 0])
+
+        """
+        io = self.adios.DeclareIO("diag3D.{0}".format(self.data3D.time))
+        var = io.DefineVariable("phi-n=0", q, q.shape, [0], q.shape)
+        var = io.DefineVariable("phi@n=0", q, q.shape, [0], q.shape)
+        var = io.DefineVariable("apars", q, q.shape, [0], q.shape)
+        """
 
         # Turbulence intensity
         if len(self.diag3D.Time) == 0:
