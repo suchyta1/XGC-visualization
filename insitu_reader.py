@@ -499,7 +499,7 @@ class xgc1(object):
             self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.qe[0] / (self.diagheat.dt * 1E6), label='Electron Outboard')
             self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.qi[0] / (self.diagheat.dt * 1E6), label='Ion Outboard')
             self.diagheat.ax.plot(self.diagheat.Time * 1E3, (self.diagheat.qi[0] + self.diagheat.qe[0]) / (self.diagheat.dt * 1E6), label='Total Outboard')
-            self.diagheat.ax.set_xlabel('Time')
+            self.diagheat.ax.set_xlabel('Time (ms)')
             self.diagheat.ax.set_ylabel('Heat (MW)')
             self.diagheat.ax.legend()
             imagename = os.path.join(outdir, "Heat_Outboard.{0}".format(self.diagheat.ext))
@@ -509,7 +509,7 @@ class xgc1(object):
             self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.qe[1] / (self.diagheat.dt * 1E6), label='Electron Inboard')
             self.diagheat.ax.plot(self.diagheat.Time * 1E3, self.diagheat.qi[1] / (self.diagheat.dt * 1E6), label='Ion Inboard')
             self.diagheat.ax.plot(self.diagheat.Time * 1E3, (self.diagheat.qi[1] + self.diagheat.qe[1]) / (self.diagheat.dt * 1E6), label='Total Inboard')
-            self.diagheat.ax.set_xlabel('Time')
+            self.diagheat.ax.set_xlabel('Time (ms)')
             self.diagheat.ax.set_ylabel('Heat (MW)')
             self.diagheat.ax.legend()
             imagename = os.path.join(outdir, "Heat_Inboard.{0}".format(self.diagheat.ext))
@@ -537,7 +537,7 @@ class xgc1(object):
             self.diagheat.lq_int = np.append(self.diagheat.lq_int, lq_int, axis=1)
             self.diagheat.ax.plot(self.diagheat.Time[1:] * 1E3, self.diagheat.lq_int[0] * 1e3, label='Outboard')
             self.diagheat.ax.plot(self.diagheat.Time[1:] * 1E3, self.diagheat.lq_int[1] * 1e3, label='Inboard')
-            self.diagheat.ax.set_xlabel('Time')
+            self.diagheat.ax.set_xlabel('Time (ms)')
             self.diagheat.ax.set_ylabel('Lambda_q, int (mm)')
             self.diagheat.ax.legend()
             imagename = os.path.join(outdir, "Lambda_q.{0}".format(self.diagheat.ext))
@@ -549,7 +549,7 @@ class xgc1(object):
             self.diagheat.ax.plot(rmidsep[0] * 1E3, QT[0] / 1e6, label='Total')
             self.diagheat.ax.set_xlabel('Midplane distance (mm)')
             self.diagheat.ax.set_ylabel('Heat Load (MW)')
-            self.diagheat.ax.set_title('Outboard {0:.4f} (ms)'.format(self.diagheat.Time[-1]*1e3))
+            self.diagheat.ax.set_title('Outboard t={0:.4f} ms'.format(self.diagheat.Time[-1]*1e3))
             self.diagheat.ax.legend()
             self.diagheat.ax.set_xlim([-10, 30])
             imagename = os.path.join(outdir, "Heat_Load_Outboard_dist.{0}".format(self.diagheat.ext))
@@ -561,7 +561,7 @@ class xgc1(object):
             self.diagheat.ax.plot(rmidsep[1] * 1E3, QT[1] / 1e6, label='Total')
             self.diagheat.ax.set_xlabel('Midplane distance (mm)')
             self.diagheat.ax.set_ylabel('Heat Load (MW)')
-            self.diagheat.ax.set_title('Inboard {0:.4f} (ms)'.format(self.diagheat.Time[-1]))
+            self.diagheat.ax.set_title('Inboard t={0:.4f} ms'.format(self.diagheat.Time[-1]*1e3))
             self.diagheat.ax.legend()
             self.diagheat.ax.set_xlim([-10, 30])
             imagename = os.path.join(outdir, "Heat_Load_Inboard_dist.{0}".format(self.diagheat.ext))
@@ -571,7 +571,7 @@ class xgc1(object):
             popt, pconv = self.eich_fit1(QT[0], rmidsep[0]*1e3, None)
             self.diagheat.ax.plot(rmidsep[0]*1e3, self.eich(rmidsep[0]*1e3, popt[0], popt[1], popt[2], popt[3]), label='Eich')
             self.diagheat.ax.plot(rmidsep[0]*1e3, QT[0], label='Heatload')
-            self.diagheat.ax.set_title('t={0:.4f} (ms) Outboard\n $\lambda_q$={1:.3f}, S={2:.3f}'.format(self.diagheat.Time[-1]*1E3, popt[2], popt[1]))
+            self.diagheat.ax.set_title('t={0:.4f} ms Outboard\n $\lambda_q$={1:.3f}, S={2:.3f}'.format(self.diagheat.Time[-1]*1E3, popt[2], popt[1]))
             self.diagheat.ax.set_xlabel('Midplane distance (mm)')
             self.diagheat.ax.legend()
             self.diagheat.ax.set_xlim([-10, 30])
@@ -624,7 +624,7 @@ class xgc1(object):
 
         # Electron density
         self.diag1D.ax.plot(self.data1D_0.psi, self.data1D_0.e_gc_density_df_1d, label="Initial")
-        self.diag1D.ax.plot(self.data1D.psi,   self.data1D.e_gc_density_df_1d,   label="Final")
+        self.diag1D.ax.plot(self.data1D.psi,   self.data1D.e_gc_density_df_1d,   label="t={0:.4f} ms".format(self.data1D.time * 1e3))
         self.diag1D.ax.set(xlabel='Normalized Pol. Flux')
         self.diag1D.ax.set(ylabel='Elec. g.c. Density (m^-3)')
         self.diag1D.ax.legend()
@@ -634,7 +634,7 @@ class xgc1(object):
 
         # Ion density
         self.diag1D.ax.plot(self.data1D_0.psi, self.data1D_0.i_gc_density_df_1d, label="Initial")
-        self.diag1D.ax.plot(self.data1D.psi,   self.data1D.i_gc_density_df_1d,   label="Final")
+        self.diag1D.ax.plot(self.data1D.psi,   self.data1D.i_gc_density_df_1d,   label="t={0:.4f} ms".format(self.data1D.time * 1e3))
         self.diag1D.ax.set(xlabel='Normalized Pol. Flux')
         self.diag1D.ax.set(ylabel='Ion g.c. Density (m^-3)')
         self.diag1D.ax.legend()
@@ -646,7 +646,7 @@ class xgc1(object):
         Te = (self.data1D.e_perp_temperature_df_1d + self.data1D.e_parallel_mean_en_df_1d)/3*2
         Te_0 = (self.data1D_0.e_perp_temperature_df_1d + self.data1D_0.e_parallel_mean_en_df_1d)/3*2
         self.diag1D.ax.plot(self.data1D_0.psi, Te_0, label="Initial")
-        self.diag1D.ax.plot(self.data1D.psi,   Te,   label="Final")
+        self.diag1D.ax.plot(self.data1D.psi,   Te,   label="t={0:.4f} ms".format(self.data1D.time * 1e3))
         self.diag1D.ax.set(xlabel='Normalized Pol. Flux')
         self.diag1D.ax.set(ylabel='Elec. Temperature (eV)')
         self.diag1D.ax.legend()
@@ -658,7 +658,7 @@ class xgc1(object):
         Ti = (self.data1D.i_perp_temperature_df_1d + self.data1D.i_parallel_mean_en_df_1d)/3*2
         Ti_0 = (self.data1D_0.i_perp_temperature_df_1d + self.data1D_0.i_parallel_mean_en_df_1d)/3*2
         self.diag1D.ax.plot(self.data1D_0.psi, Ti_0, label="Initial")
-        self.diag1D.ax.plot(self.data1D.psi,   Ti,   label="Final")
+        self.diag1D.ax.plot(self.data1D.psi,   Ti,   label="t={0:.4f} ms".format(self.data1D.time * 1e3))
         self.diag1D.ax.set(xlabel='Normalized Pol. Flux')
         self.diag1D.ax.set(ylabel='Ion Temperature (eV)')
         self.diag1D.ax.legend()
@@ -668,7 +668,7 @@ class xgc1(object):
 
         # Ion parallel flow
         self.diag1D.ax.plot(self.data1D_0.psi, self.data1D_0.i_parallel_flow_df_1d, label="Initial")
-        self.diag1D.ax.plot(self.data1D.psi,   self.data1D.i_parallel_flow_df_1d,   label="Final")
+        self.diag1D.ax.plot(self.data1D.psi,   self.data1D.i_parallel_flow_df_1d,   label="t={0:.4f} ms".format(self.data1D.time * 1e3))
         self.diag1D.ax.set(xlabel='Normalized Pol. Flux')
         self.diag1D.ax.set(ylabel='Ion. parallel flow (m/s)')
         self.diag1D.ax.legend()
@@ -678,7 +678,7 @@ class xgc1(object):
 
         # Potential
         self.diag1D.ax.plot(self.data1D_0.psi00/self.dataunits.psi_x, self.data1D_0.pot00_1d, label="Initial")
-        self.diag1D.ax.plot(self.data1D.psi00/self.dataunits.psi_x,   self.data1D.pot00_1d,   label="Final")
+        self.diag1D.ax.plot(self.data1D.psi00/self.dataunits.psi_x,   self.data1D.pot00_1d,   label="t={0:.4f} ms".format(self.data1D.time * 1e3))
         self.diag1D.ax.set(xlabel='psi00/psix')
         self.diag1D.ax.set(ylabel='Potential (V)')
         self.diag1D.ax.legend()
@@ -702,7 +702,7 @@ class xgc1(object):
         self.diag1D.ax.legend()
         self.diag1D.ax.set(xlabel='Normalized Pol. Flux')
         self.diag1D.ax.set(ylabel='Radial Heat Flux (MW)')
-        self.diag1D.ax.set(title='Radial Heat Flux by ExB at final')
+        self.diag1D.ax.set(title='Radial Heat Flux by ExB at t={0:.4f} ms'.format(self.data1D.time * 1e3))
         imagename = os.path.join(outdir, "Radial_Heat_Flux_ExB.{0}".format(self.diag1D.ext))
         self.diag1D.fig.savefig(imagename, bbox_inches="tight")
         self.diag1D.ax.cla()
@@ -715,7 +715,7 @@ class xgc1(object):
         self.diag1D.ax.legend()
         self.diag1D.ax.set(xlabel='Normalized Pol. Flux')
         self.diag1D.ax.set(ylabel='Radial Heat Flux (MW)')
-        self.diag1D.ax.set(title='Radial Heat Flux by ExB at final')
+        self.diag1D.ax.set(title='Radial Heat Flux by ExB at t={0:.4f} ms'.format(self.data1D.time * 1e3))
         imagename = os.path.join(outdir, "Radial_Heat_Flux.{0}".format(self.diag1D.ext))
         self.diag1D.fig.savefig(imagename, bbox_inches="tight")
         self.diag1D.ax.cla()
@@ -733,9 +733,9 @@ class xgc1(object):
         if self.data1D.timeflux.shape[0] > 1:
             cf = self.diag1D.ax.contourf(self.data1D.psi, self.data1D.timeflux*1E3, self.data1D.efluxexbi/1E6, levels=50, cmap='jet')
             self.diag1D.fig.colorbar(cf, ax=self.diag1D.ax)
-            plt.title('Ion Heat Flux by ExB (MW)')
-            plt.xlabel('Poloidal Flux')
-            plt.ylabel('Time (ms)')
+            self.diag1D.ax.set_title('Ion Heat Flux by ExB (MW)')
+            self.diag1D.ax.set_xlabel('Poloidal Flux')
+            self.diag1D.ax.set_ylabel('Time (ms)')
             imagename = os.path.join(outdir, "Ion_Heat_Flux_ExB_2D.{0}".format(self.diag1D.ext))
             self.diag1D.fig.savefig(imagename, bbox_inches="tight")
             self.diag1D.fig.clear()
@@ -745,9 +745,9 @@ class xgc1(object):
         if self.data1D.timeflux.shape[0] > 1:
             cf = self.diag1D.ax.contourf(self.data1D.psi, self.data1D.timeflux*1E3, self.data1D.efluxi/1E6, levels=50, cmap='jet')
             self.diag1D.fig.colorbar(cf, ax=self.diag1D.ax)
-            plt.title('Ion Heat Flux (MW)')
-            plt.xlabel('Poloidal Flux')
-            plt.ylabel('Time (ms)')
+            self.diag1D.ax.set_title('Ion Heat Flux (MW)')
+            self.diag1D.ax.set_xlabel('Poloidal Flux')
+            self.diag1D.ax.set_ylabel('Time (ms)')
             imagename = os.path.join(outdir, "Ion_Heat_Flux_2D.{0}".format(self.diag1D.ext))
             self.diag1D.fig.savefig(imagename, bbox_inches="tight")
             self.diag1D.fig.clear()

@@ -37,6 +37,10 @@ def SetOptions(options, args):
 
     if 'skip' not in options['diag1D']:
         options['diag1D']['skip'] = 0
+    if 'skip' not in options['diag3D']:
+        options['diag3D']['skip'] = 0
+    if 'skip' not in options['diagheat']:
+        options['diagheat']['skip'] = 0
 
     return options
     
