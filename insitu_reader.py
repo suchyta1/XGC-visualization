@@ -98,6 +98,20 @@ class xgc1(object):
             else:
                 setattr(self, key, default)
 
+
+        def DashboardSave(self, plotname, step):
+            steparr = np.array([step])
+            if not self.DashboardInit:
+                ioname = plotname + ".done"
+                self.DashboardIO = self.adios.DeclareIO(ioname)
+                VarNumber = self.DashboardIO.DefineVariable("Step", steparr, [], [], [])
+                self.DashboardEngine = self.DashboardIO.Open(ioname + ".bp", adios2.Mode.Write)
+                self.DashboardInit = True
+            self.DashboardEngine.BeginStep()
+            var = self.DashboardIO.InquireVariable("Step")
+            self.DashboardEngine.Put(var, steparr)
+            self.DashboardEngine.EndStep()
+
         """
         def DashboardSave(self, plotname, step, directory):
             steparr = np.array([step])
@@ -247,6 +261,8 @@ class xgc1(object):
 
         if self.mesh.on:
             self.mesh.SingleRead()
+            self.mesh.r = np.copy(self.mesh.rz[:, 0])
+            self.mesh.z = np.copy(self.mesh.rz[:, 1])
 
         if self.volumes.on:
             self.volumes.SingleRead()
@@ -370,7 +386,10 @@ class xgc1(object):
 
 
     def Close(self):
-        pass
+        for diag in [self.diag3D, self.diag1D, self.diagheat]:
+            if diag.DashboardInit:
+                diag.DashboardEngine.Close()
+
         """
         if self.options['turbulence intensity']['use'] and self.TurbData.DashboardInit:
             self.TurbData.DashboardEngine.Close()
@@ -444,7 +463,7 @@ class xgc1(object):
     def PlotHeat(self):
 
         # Directory setup (for dashboard)
-        outdir = os.path.join("heat-images", "{0}".format(self.dataheat.timestep), "{0}-1D".format(self.diagheat.codename))
+        outdir = os.path.join("heat-images", "{0}".format(self.dataheat.timestep), "{0}-heat".format(self.diagheat.codename))
         if not os.path.exists(outdir):
             os.makedirs(outdir)
 
@@ -593,6 +612,8 @@ class xgc1(object):
         self.diagheat.fig.savefig(imagename, bbox_inches="tight")
         self.diagheat.ax.cla()
 
+        self.diagheat.DashboardSave("heat", self.data3D.timestep)
+
 
     def Plot1D(self):
 
@@ -732,6 +753,8 @@ class xgc1(object):
             self.diag1D.fig.clear()
             self.diag1D.ax = self.diag1D.fig.add_subplot(self.diag1D.gs[0, 0])
 
+        self.diag1D.DashboardSave("1D", self.data3D.timestep)
+
 
     def Plot3D(self):
 
@@ -741,8 +764,8 @@ class xgc1(object):
             os.makedirs(outdir)
 
         # Normalized dpot
-        q = (self.data3D.dpot[self.diag3D.plane, :] - np.mean(self.data3D.dpot, axis=0)) / self.f0mesh.f0_T_ev[0, :]
-        ColorAxis = self.diag3D.ax.tricontourf(self.diag3D.triobj, q, cmap=self.diag3D.cmap, extend='both', levels=self.diag3D.levels)
+        q_dpot = (self.data3D.dpot[self.diag3D.plane, :] - np.mean(self.data3D.dpot, axis=0)) / self.f0mesh.f0_T_ev[0, :]
+        ColorAxis = self.diag3D.ax.tricontourf(self.diag3D.triobj, q_dpot, cmap=self.diag3D.cmap, extend='both', levels=self.diag3D.levels)
         ColorBar = self.diag3D.fig.colorbar(ColorAxis, ax=self.diag3D.ax, pad=0)
         ColorBar.ax.tick_params(labelsize=self.diag3D.fontsize)
         ColorBar.ax.yaxis.offsetText.set_fontsize(self.diag3D.fontsize)
@@ -758,7 +781,8 @@ class xgc1(object):
         self.diag3D.ax = self.diag3D.fig.add_subplot(self.diag3D.gs[0, 0])
 
         # pot n=0 mode
-        ColorAxis = self.diag3D.ax.tricontourf(self.diag3D.triobj, self.data3D.potm0, cmap=self.diag3D.cmap, extend='both', levels=self.diag3D.levels)
+        q_potm0 = self.data3D.potm0
+        ColorAxis = self.diag3D.ax.tricontourf(self.diag3D.triobj, q_potm0, cmap=self.diag3D.cmap, extend='both', levels=self.diag3D.levels)
         ColorBar = self.diag3D.fig.colorbar(ColorAxis, ax=self.diag3D.ax, pad=0)
         ColorBar.ax.tick_params(labelsize=self.diag3D.fontsize)
         ColorBar.ax.yaxis.offsetText.set_fontsize(self.diag3D.fontsize)
@@ -776,8 +800,8 @@ class xgc1(object):
         # Normalized Apar
         imass = self.dataunits.ptl_ion_mass_au * 1.67E-27
         vth_f0 = np.sqrt(1.6E-19 * self.f0mesh.f0_T_ev[0, :] / imass)
-        q = self.data3D.apars[self.diag3D.plane, :] * vth_f0 / self.f0mesh.f0_T_ev[0, :]
-        ColorAxis = self.diag3D.ax.tricontourf(self.diag3D.triobj, q, cmap=self.diag3D.cmap, extend='both', levels=self.diag3D.levels)
+        q_apars = self.data3D.apars[self.diag3D.plane, :] * vth_f0 / self.f0mesh.f0_T_ev[0, :]
+        ColorAxis = self.diag3D.ax.tricontourf(self.diag3D.triobj, q_apars, cmap=self.diag3D.cmap, extend='both', levels=self.diag3D.levels)
         ColorBar = self.diag3D.fig.colorbar(ColorAxis, ax=self.diag3D.ax, pad=0)
         ColorBar.ax.tick_params(labelsize=self.diag3D.fontsize)
         ColorBar.ax.yaxis.offsetText.set_fontsize(self.diag3D.fontsize)
@@ -792,12 +816,28 @@ class xgc1(object):
         self.diag3D.fig.clear()
         self.diag3D.ax = self.diag3D.fig.add_subplot(self.diag3D.gs[0, 0])
 
-        """
-        io = self.adios.DeclareIO("diag3D.{0}".format(self.data3D.time))
-        var = io.DefineVariable("phi-n=0", q, q.shape, [0], q.shape)
-        var = io.DefineVariable("phi@n=0", q, q.shape, [0], q.shape)
-        var = io.DefineVariable("apars", q, q.shape, [0], q.shape)
-        """
+        if ('write-adios' in self.diag3D.options) and self.diag3D.options['write-adios']:
+            ioname = "diag3D.{0}".format(self.data3D.time)
+            filename = os.path.join(outdir, "{0}.bp".format(ioname))
+            io = self.adios.DeclareIO(ioname)
+            engine = io.Open(filename, adios2.Mode.Write)
+            var_dpot  = io.DefineVariable("q_dpot",  q_dpot,  q_dpot.shape,  [0], q_dpot.shape)
+            var_potm0 = io.DefineVariable("q_potm0", q_potm0, q_potm0.shape, [0], q_potm0.shape)
+            var_apars = io.DefineVariable("q_apars", q_apars, q_apars.shape, [0], q_apars.shape)
+            var_rz = io.DefineVariable("mesh_rz", self.mesh.rz, self.mesh.rz.shape, [0,0], self.mesh.rz.shape)
+            var_r = io.DefineVariable("mesh_r", self.mesh.r, self.mesh.r.shape, [0], self.mesh.r.shape)
+            var_z = io.DefineVariable("mesh_z", self.mesh.z, self.mesh.z.shape, [0], self.mesh.z.shape)
+            var_c = io.DefineVariable("mesh_connectivity", self.mesh.nd_connect_list, self.mesh.nd_connect_list.shape, [0, 0], self.mesh.nd_connect_list.shape)
+            engine.BeginStep()
+            engine.Put(var_dpot,  q_dpot)
+            engine.Put(var_potm0, q_potm0)
+            engine.Put(var_apars, q_apars)
+            engine.Put(var_rz, self.mesh.rz)
+            engine.Put(var_r, self.mesh.r)
+            engine.Put(var_z, self.mesh.z)
+            engine.Put(var_c, self.mesh.nd_connect_list)
+            engine.EndStep()
+            engine.Close()
 
         # Turbulence intensity
         if len(self.diag3D.Time) == 0:
@@ -810,15 +850,13 @@ class xgc1(object):
         var1 = self.data3D.dpot
         var1 = var1 / self.f0mesh.f0_T_ev[0, :]
         varsqr = var1 * var1
+        # Time
+        self.diag3D.Time += [self.data3D.time * 1E3]  # ms
+        
         '''
         # Not using yet
         #s = np.mean(varsqr * self.mesh.node_vol) / np.mean(self.mesh.node_vol)
         #en = np.append(en, s)
-        '''
-        # Time
-        self.diag3D.Time += [self.data3D.time * 1E3]  # ms
-
-        '''
         # partial sum
         sp = np.mean(varsqr[:, self.diag3D.Mask] * self.mesh.node_vol[self.diag3D.Mask]) / np.mean(self.mesh.node_vol[self.diag3D.Mask])
         self.diag3D.enp = np.append(self.diag3D.enp, sp)
@@ -829,7 +867,6 @@ class xgc1(object):
         imagename = os.path.join(outdir, "enp.{0}".format(self.diag3D.ext))
         self.diag3D.fig.savefig(imagename, bbox_inches="tight")
         self.diag3D.ax.cla()
-        self.diag3D.ax = self.diag3D.fig.add_subplot(self.diag3D.gs[0, 0])
         '''
 
         # spectral
@@ -845,7 +882,8 @@ class xgc1(object):
         imagename = os.path.join(outdir, "enn.{0}".format(self.diag3D.ext))
         self.diag3D.fig.savefig(imagename, bbox_inches="tight")
         self.diag3D.ax.cla()
-        self.diag3D.ax = self.diag3D.fig.add_subplot(self.diag3D.gs[0, 0])
+
+        self.diag3D.DashboardSave("mesh", self.data3D.timestep)
 
 
     def PlaneVarPlot(self, PlaneObj):
