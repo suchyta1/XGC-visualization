@@ -9,6 +9,8 @@ Python script for XGC data analysis and Maplotlib visualization
 - ADIOS Python bindings
 - Optional: EFFIS Python bindings -- needed for movie EFFIS hooks
 
+<!--
+
 ## Usage
 
 ```
@@ -69,3 +71,4 @@ dA:                       # Plot Apars on one poloidal plane
 | ---- | -- |
 | <img src="https://user-images.githubusercontent.com/3419552/118795722-e3a0ae00-b868-11eb-942f-7fb5d84a3b57.png" width="500"> | <img src="https://user-images.githubusercontent.com/3419552/118795905-12b71f80-b869-11eb-9fb0-2ae107edde91.png" width="500"> |
 
+-->
