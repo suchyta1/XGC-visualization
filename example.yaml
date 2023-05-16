@@ -1,25 +1,7 @@
-#turbulence intensity:
-#  use: false
-#  nmodes: 5
-#
-#dA:
-#  use: false
-#
-#dphi:
-#  use: false
-
 diag3D:
   use: true
   write-adios: false
 
 diag1D:
   use: true
-  skip: 489
 
-diagheat:
-  use: true
-  skip: 489
-
-start-time: 4.33304e-05
-#end-time:   4.62471e-05
-end-time:   4.35471e-05
