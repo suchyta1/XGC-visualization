@@ -15,6 +15,8 @@ import matplotlib.gridspec as gridspec
 from matplotlib.tri import Triangulation
 import matplotlib.ticker
 
+import matplotlib
+
 import sys
 import re
 import copy
@@ -91,6 +93,7 @@ class xgc1(object):
             self.DefaultOption('fontsize', 'medium')
             self.DefaultOption('ext', 'png')
             self.DefaultOption('movie', False)
+            self.DefaultOption('outdir', 'effis-plots')
 
 
         def DefaultOption(self, key, default):
@@ -107,13 +110,16 @@ class xgc1(object):
 
         def PlotLinesADIOS(self, xlabel, ylabel, x, yarr, labelarr, xname, namearr, attrname=None, logy=False, time=0.0):
             for y, label in zip(yarr, labelarr):
-                self.ax.plot(x, y, label=label)
+                p = self.ax.plot(x, y, label=label)
             self.ax.set_xlabel(xlabel)
             self.ax.set_ylabel(ylabel)
             self.ax.legend()
             imagename = os.path.join(self.outdir, "{1}-vs-{2}.{0}".format(self.ext, ylabel.replace("/","|"), xlabel).replace("/","|"))
+
+            #print("LinesADIOS", type(p) is list, type(p[0]) is matplotlib.lines.Line2D, len(p), self.ax.get_xlabel(), self.ax.get_ylabel(), self.ax.get_legend_handles_labels(), p[0].get_xdata())
             self.fig.savefig(imagename, bbox_inches="tight")
             self.ax.cla()
+            
             if ('write-adios' in self.options) and self.options['write-adios']:
                 """
                 attr = ["lines", xname, *namearr]
@@ -134,7 +140,10 @@ class xgc1(object):
                 if attrname is None:
                     attrname = ylabel
                 self.io.DefineAttribute(attrname, json.dumps(attribute))
+                fdir, fname = os.path.split(self.ADIOSFilename)
+                fdir = os.path.basename(fdir)
                 self.JsonList += [{'file_name': self.ADIOSFilename, 'attribute_name': attrname, 'group_name': self.group_name, 'time': time}]
+                #self.JsonList += [{'file_name': os.path.join(fdir, fname), 'attribute_name': attrname, 'group_name': self.group_name, 'time': time}]
                    
 
         def PlotColorADIOS(self, xlabel, ylabel, colorlabel, x, y, color, xname, yname, colorname, attrname=None, time=0.0):
@@ -144,8 +153,11 @@ class xgc1(object):
             self.ax.set_ylabel(ylabel)
             self.ax.set_title(colorlabel)
             imagename = os.path.join(self.outdir, "{1}-colormap.{0}".format(self.ext, colorname.replace("/","|")))
+
+            #print("ColorADIOS", type(cf) is matplotlib.contour.QuadContourSet, self.ax.get_xlabel(), self.ax.get_ylabel(), cf.get_xdata())
             self.fig.savefig(imagename, bbox_inches="tight")
             self.fig.clear()
+
             self.ax = self.fig.add_subplot(self.gs[0, 0])
             if ('write-adios' in self.options) and self.options['write-adios']:
                 """
@@ -169,7 +181,10 @@ class xgc1(object):
                 if attrname is None:
                     attrname = colorname.upper()
                 self.io.DefineAttribute(attrname, json.dumps(attribute))
+                fdir, fname = os.path.split(self.ADIOSFilename)
+                fdir = os.path.basename(fdir)
                 self.JsonList += [{'file_name': self.ADIOSFilename, 'attribute_name': attrname, 'group_name': self.group_name, 'time': time}]
+                #self.JsonList += [{'file_name': os.path.join(fdir, fname), 'attribute_name': attrname, 'group_name': self.group_name, 'time': time}]
 
 
         def PlotTriColorADIOS(self, xlabel, ylabel, colorlabel, triang, color, mesh, meshname, conn, connname, colorname, attrname=None, time=0.0):
@@ -184,8 +199,11 @@ class xgc1(object):
             self.ax.set_title(colorlabel)
             self.ax.set_aspect(1)
             imagename = os.path.join(self.outdir, "{1}-colormap.{0}".format(self.ext, colorname.replace("/","|")))
+
+            print("TriColorADIOS", type(cf) is matplotlib.tri._tricontour.TriContourSet, self.ax.get_xlabel(), self.ax.get_ylabel())
             self.fig.savefig(imagename, bbox_inches="tight")
             self.fig.clear()
+
             self.ax = self.fig.add_subplot(self.gs[0, 0])
             if ('write-adios' in self.options) and self.options['write-adios']:
                 """
@@ -209,7 +227,10 @@ class xgc1(object):
                 if attrname is None:
                     attrname = colorname.upper()
                 self.io.DefineAttribute(attrname, json.dumps(attribute))
+                fdir, fname = os.path.split(self.ADIOSFilename)
+                fdir = os.path.basename(fdir)
                 self.JsonList += [{'file_name': self.ADIOSFilename, 'attribute_name': attrname, 'group_name': self.group_name, 'time': time}]
+                #self.JsonList += [{'file_name': os.path.join(fdir, fname), 'attribute_name': attrname, 'group_name': self.group_name, 'time': time}]
 
 
         def DashboardSave(self, plotname, step):
@@ -460,7 +481,9 @@ class xgc1(object):
     def Plot1D(self):
 
         # Directory setup (for dashboard)
-        outdir = os.path.join("1D-images", "{0}".format(self.data1D.timestep), "{0}-1D".format(self.diag1D.codename))
+        #outdir = os.path.join("1D-images", "{0}".format(self.data1D.timestep), "{0}-1D".format(self.diag1D.codename))
+        outdir = os.path.join(self.diag1D.options['outdir'], "{0}".format(self.data1D.timestep), "1D")
+
         self.diag1D.outdir = outdir
         if not os.path.exists(outdir):
             os.makedirs(outdir)
@@ -557,7 +580,9 @@ class xgc1(object):
     def Plot3D(self):
 
         # Directory setup (for dashboard)
-        outdir = os.path.join("mesh-images", "{0}".format(self.data3D.timestep), "{0}-mesh".format(self.diag3D.codename))
+        #outdir = os.path.join("mesh-images", "{0}".format(self.data3D.timestep), "{0}-mesh".format(self.diag3D.codename))
+        outdir = os.path.join(self.diag3D.options['outdir'], "{0}".format(self.data3D.timestep), "mesh")
+
         self.diag3D.outdir = outdir
         if not os.path.exists(outdir):
             os.makedirs(outdir)
@@ -615,6 +640,13 @@ class xgc1(object):
         
         self.diag3D.PlotTriColorADIOS('r (m)', 'z (m)', '$A_{{||}}$ at {0:.2e} ms'.format(self.data3D.time * 1e3), self.diag3D.triobj, q_apars, self.mesh.rz, "mesh_rz", self.mesh.nd_connect_list, "mesh_conn", "q_apars", time=self.data3D.time)
 
+
+        if ('write-adios' in self.diag3D.options) and self.diag3D.options['write-adios']:
+            self.diag3D.engine.EndStep()
+            self.diag3D.engine.Close()
+            JsonFilename = os.path.join(outdir, "plots.json")
+            with open(JsonFilename, "w") as outfile:
+                outfile.write(json.dumps(self.diag3D.JsonList, indent=4))
 
         self.diag3D.DashboardSave("mesh", self.data3D.timestep)
 
