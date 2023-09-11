@@ -234,7 +234,7 @@ class xgc1(object):
 
 
         def DashboardSave(self, plotname, step):
-            steparr = np.array([step])
+            steparr = np.array([step], dtype=np.int64)
             if not self.DashboardInit:
                 ioname = plotname + ".done"
                 self.DashboardIO = self.adios.DeclareIO(ioname)
